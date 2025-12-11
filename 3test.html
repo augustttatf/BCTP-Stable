@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BCTP - 霸凌行為測驗</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
+<style>
+  .quiz-question { margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+  #score-box { margin-top: 20px; font-size: 1.2em; font-weight: bold; }
+</style>
+</head>
+<body>
+<header>
+  <div class="container">
+    <h1>BCTP 測驗</h1>
+    <p>請回答以下問題，達 60 分才能進入反思表單。</p>
+  </div>
+</header>
+
+<main>
+  <div class="container">
+    <div id="quiz-container"></div>
+
+    <button id="next-btn" class="btn-animated btn-green">
+      <span class="default-text">下一步：反思表單 →</span>
+      <span class="hover-text">提交測驗</span>
+    </button>
+
+    <div id="score-box"></div>
+  </div>
+</main>
+
+<footer>
+  <p>BCTP (Bullying Consequence Transparency Platform)</p>
+</footer>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+  const QUIZ_JSON_URL = 'https://raw.githubusercontent.com/augustttatf/bctp/main/blablabla.json';  // 用你提供的 JSON 連結
+  const quizContainer = document.getElementById('quiz-container');
+  const nextBtn = document.getElementById('next-btn');
+  const scoreBox = document.getElementById('score-box');
+
+  let quizQuestions = [];
+  let score = 0;
+
+  // 從 localStorage 讀取選擇的行為類型
+  const selectedQuestionTypes = JSON.parse(localStorage.getItem('selectedQuestionTypes') || '[]');
+  if (!selectedQuestionTypes.length) {
+    alert('未選擇行為類型，將返回行為勾選頁');
+    window.location.href = 'query.html';
+    return;
+  }
+
+  try {
+    const res = await fetch(QUIZ_JSON_URL);
+    if (!res.ok) throw new Error(`Failed to fetch JSON: ${res.status} ${res.statusText}`);
+    const data = await res.json();
+
+    // 將題目依 questionType 分組
+    const groupedByType = {};
+    selectedQuestionTypes.forEach(type => {
+      groupedByType[type] = data.questions.filter(q => q.questionType === type);
+    });
+
+    // 平均分配題目，每類型題目數量
+    const totalQuestions = 10;
+    const typeCount = selectedQuestionTypes.length;
+    const baseCount = Math.floor(totalQuestions / typeCount);
+    let remainder = totalQuestions % typeCount;
+
+    // 抽題
+    quizQuestions = [];
+    selectedQuestionTypes.forEach(type => {
+      let typeQuestions = groupedByType[type].slice(); // 複製陣列
+      // 隨機排序
+      typeQuestions.sort(() => 0.5 - Math.random());
+      let count = baseCount + (remainder > 0 ? 1 : 0);
+      remainder--;
+      quizQuestions.push(...typeQuestions.slice(0, count));
+    });
+
+    // 若總題數不足 10，從各類型補足
+    if (quizQuestions.length < totalQuestions) {
+      let shortage = totalQuestions - quizQuestions.length;
+      const extraPool = [];
+      Object.values(groupedByType).forEach(arr => extraPool.push(...arr));
+      extraPool.sort(() => 0.5 - Math.random());
+      quizQuestions.push(...extraPool.slice(0, shortage));
+    }
+
+    // 將題目打亂順序
+    quizQuestions.sort(() => 0.5 - Math.random());
+
+  } catch (err) {
+    console.error('Error loading quiz data:', err);
+    alert(`題庫載入失敗，請稍後再試。詳細錯誤：${err.message}`);
+    return;
+  }
+
+  // 渲染測驗題目
+  function renderQuiz() {
+    quizContainer.innerHTML = '';
+    quizQuestions.forEach((q, idx) => {
+      const div = document.createElement('div');
+      div.className = 'quiz-question';
+      div.innerHTML = `<h3>${idx+1}. ${q.question}</h3>`;
+
+      // 選項隨機排序
+      const options = q.options.slice();
+      options.sort(() => 0.5 - Math.random());
+
+      options.forEach((opt, i) => {
+        const label = document.createElement('label');
+        label.innerHTML = `<input type="radio" name="q${idx}" value="${q.options.indexOf(opt)}"> ${opt}`;
+        div.appendChild(label);
+        div.appendChild(document.createElement('br'));
+      });
+
+      quizContainer.appendChild(div);
+    });
+    scoreBox.textContent = '';
+  }
+
+  renderQuiz();
+
+  // 下一步按鈕事件
+  nextBtn.addEventListener('click', function() {
+    score = 0;
+    quizQuestions.forEach((q, idx) => {
+      const selected = quizContainer.querySelector(`input[name="q${idx}"]:checked`);
+      if (selected && Number(selected.value) === q.correctAnswerIndex) score += 10;
+    });
+
+    if (score >= 60) {
+      localStorage.setItem('quizAnswers', JSON.stringify({
+        questionTypes: selectedQuestionTypes,
+        answers: quizQuestions.map((q, idx) => {
+          const selected = quizContainer.querySelector(`input[name="q${idx}"]:checked`);
+          return selected ? Number(selected.value) : null;
+        })
+      }));
+      window.location.href = '4form.html';
+    } else {
+      alert(`未達 60 分，分數：${score} 分 → 題目將重新洗牌`);
+      scoreBox.textContent = `分數：${score} 分，請重新答題`;
+      score = 0;
+      // 重新排序題目及選項
+      quizQuestions.forEach(q => q.options.sort(() => 0.5 - Math.random()));
+      quizQuestions.sort(() => 0.5 - Math.random());
+      renderQuiz();
+    }
+  });
+});
+</script>
+
+</body>
+</html>
